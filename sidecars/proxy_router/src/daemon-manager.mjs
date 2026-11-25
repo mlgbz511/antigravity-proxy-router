@@ -387,13 +387,21 @@ export class DaemonManager {
     return { launching: true, launcherPid: parseInt(pidOut, 10) || null, restart };
   }
 
+  getShortcutStatus({ configStore } = {}) {
+    const backup = configStore?.data?.shortcutBackup;
+    return {
+      takenOver: Array.isArray(backup) && backup.length > 0,
+      count: Array.isArray(backup) ? backup.length : 0,
+      paths: Array.isArray(backup) ? backup.map(b => b.path) : [],
+    };
+  }
+
   /**
-   * Create a silent Desktop shortcut "Antigravity (Proxy).lnk" so launching from Desktop / Coodesker
-   * starts the detached daemon and injects HTTPS_PROXY directly without rebooting Windows.
+   * Take over existing Desktop & Start Menu Antigravity.lnk shortcuts (with full backup for 1-click restore).
    */
-  createDesktopShortcut({ listenPort = 17890 } = {}) {
+  takeoverShortcuts({ configStore, listenPort = 17890 } = {}) {
     if (process.platform !== 'win32') {
-      throw new Error('Desktop shortcut creation is supported on Windows only');
+      throw new Error('Shortcut takeover is supported on Windows only');
     }
     const pluginRoot = path.resolve(__dirname, '..', '..', '..');
     const launcherPath = path.join(pluginRoot, 'scripts', 'launch-antigravity.ps1');
@@ -418,25 +426,70 @@ export class DaemonManager {
     const iconLoc = fs.existsSync(localAgyExe) ? `${localAgyExe},0` : '';
 
     const psScript = [
+      '$ErrorActionPreference = "Stop"',
       '$desktop = [Environment]::GetFolderPath("Desktop")',
-      '$lnkPath = Join-Path $desktop "Antigravity (Proxy).lnk"',
+      '$startMenu = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs"',
+      '$candidates = @((Join-Path $desktop "Antigravity.lnk"), (Join-Path $startMenu "Antigravity.lnk"))',
       '$sh = New-Object -ComObject WScript.Shell',
-      '$sc = $sh.CreateShortcut($lnkPath)',
-      '$sc.TargetPath = "wscript.exe"',
-      `$sc.Arguments = '//B //Nologo "${vbsPath.replace(/'/g, "''")}"'`,
-      `$sc.WorkingDirectory = '${path.dirname(vbsPath).replace(/'/g, "''")}'`,
-      '$sc.Description = "Launch Antigravity with Proxy Router HTTPS_PROXY"',
-      iconLoc ? `$sc.IconLocation = '${iconLoc.replace(/'/g, "''")}'` : '',
-      '$sc.Save()',
-      'Write-Output $lnkPath',
+      '$backed = @()',
+      'foreach ($lnk in $candidates) {',
+      '  if (-not (Test-Path $lnk)) { continue }',
+      '  $sc = $sh.CreateShortcut($lnk)',
+      '  $backed += [pscustomobject]@{ path=$lnk; targetPath=$sc.TargetPath; arguments=$sc.Arguments; workingDirectory=$sc.WorkingDirectory; iconLocation=$sc.IconLocation }',
+      '  $sc.TargetPath = "wscript.exe"',
+      `  $sc.Arguments = '//B //Nologo "${vbsPath.replace(/'/g, "''")}"'`,
+      `  $sc.WorkingDirectory = '${path.dirname(vbsPath).replace(/'/g, "''")}'`,
+      iconLoc ? `  if (-not $sc.IconLocation -or $sc.IconLocation -eq ',0') { $sc.IconLocation = '${iconLoc.replace(/'/g, "''")}' }` : '',
+      '  $sc.Save()',
+      '}',
+      'ConvertTo-Json -InputObject @($backed) -Compress',
     ].filter(Boolean).join('; ');
 
-    const shortcutPath = execFileSync(
+    const raw = execFileSync(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-Command', psScript],
-      { encoding: 'utf8', windowsHide: true, timeout: 5000 }
+      { encoding: 'utf8', windowsHide: true, timeout: 6000 }
     ).trim();
+    const items = JSON.parse(raw || '[]');
+    if (configStore && !configStore.data.shortcutBackup && items.length > 0) {
+      configStore.update({ shortcutBackup: items });
+    }
+    return this.getShortcutStatus({ configStore });
+  }
 
-    return { ok: true, shortcutPath, vbsPath };
+  /**
+   * Restore backed-up Desktop & Start Menu Antigravity.lnk shortcuts.
+   */
+  restoreShortcuts({ configStore } = {}) {
+    if (process.platform !== 'win32') {
+      throw new Error('Shortcut restore is supported on Windows only');
+    }
+    const backup = configStore?.data?.shortcutBackup;
+    if (!Array.isArray(backup) || backup.length === 0) {
+      return this.getShortcutStatus({ configStore });
+    }
+
+    const b64 = Buffer.from(JSON.stringify(backup), 'utf8').toString('base64');
+    const psScript = [
+      `$items = ConvertFrom-Json ([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}')))`,
+      '$sh = New-Object -ComObject WScript.Shell',
+      'foreach ($item in $items) {',
+      '  if (-not (Test-Path $item.path)) { continue }',
+      '  $sc = $sh.CreateShortcut($item.path)',
+      '  $sc.TargetPath = [string]$item.targetPath',
+      '  $sc.Arguments = [string]$item.arguments',
+      '  $sc.WorkingDirectory = [string]$item.workingDirectory',
+      '  if ($item.iconLocation) { $sc.IconLocation = [string]$item.iconLocation }',
+      '  $sc.Save()',
+      '}',
+    ].join('; ');
+
+    execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', psScript],
+      { encoding: 'utf8', windowsHide: true, timeout: 6000 }
+    );
+    configStore.update({ shortcutBackup: null });
+    return this.getShortcutStatus({ configStore });
   }
 }

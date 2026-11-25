@@ -941,10 +941,18 @@
 
           <div class="takeover-row">
             <div class="tg-row-main">
-              <span class="tg-row-label">桌面代理快捷方式</span>
-              <div id="shortcut-sub" class="tg-row-sub">Antigravity (Proxy).lnk</div>
+              <span class="tg-row-label">原生快捷方式接管</span>
+              <div id="shortcut-sub" class="tg-row-sub">检测中...</div>
             </div>
-            <button id="create-shortcut-btn" class="btn btn-sm" type="button">生成快捷方式</button>
+            <button id="shortcut-takeover-btn" class="btn btn-sm" type="button">接管</button>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">刷新桌面环境缓存</span>
+              <div id="refresh-shell-sub" class="tg-row-sub">重启 Explorer 重载 HTTPS_PROXY</div>
+            </div>
+            <button id="refresh-shell-btn" class="btn btn-sm" type="button">刷新桌面</button>
           </div>
 
           <div class="takeover-row">
@@ -1395,6 +1403,21 @@
       sSub.textContent = tk.currentHttpProxy ? `当前: ${tk.currentHttpProxy}` : '未接管';
       sBtn.textContent = '接管';
       sBtn.className = 'btn btn-sm';
+    }
+
+    const sc = state.shortcutStatus || {};
+    const scSub = $('shortcut-sub');
+    const scBtn = $('shortcut-takeover-btn');
+    if (scSub && scBtn) {
+      if (sc.takenOver) {
+        scSub.innerHTML = `<span style="color:var(--ok)">已接管</span> · ${sc.count} 个原生快捷方式`;
+        scBtn.textContent = '还原';
+        scBtn.className = 'btn btn-sm btn-danger';
+      } else {
+        scSub.textContent = '未接管（接管桌面/开始菜单 Antigravity.lnk）';
+        scBtn.textContent = '接管';
+        scBtn.className = 'btn btn-sm';
+      }
     }
   }
 
@@ -1885,22 +1908,28 @@
   $('launch-agy-btn').addEventListener('click', () => relaunchAntigravity($('launch-agy-btn')));
   $('banner-relaunch-btn').addEventListener('click', () => relaunchAntigravity($('banner-relaunch-btn')));
 
-  $('create-shortcut-btn').addEventListener('click', async () => {
-    const btn = $('create-shortcut-btn');
+  $('shortcut-takeover-btn').addEventListener('click', async () => {
+    const action = state.shortcutStatus?.takenOver ? 'restore' : 'takeover';
+    state = await api('/api/shortcuts', 'POST', { action });
+    renderAll();
+  });
+
+  $('refresh-shell-btn').addEventListener('click', async () => {
+    const btn = $('refresh-shell-btn');
     btn.disabled = true;
-    btn.textContent = '生成中...';
+    btn.textContent = '刷新中...';
     try {
-      const res = await api('/api/create-shortcut', 'POST', {});
-      $('shortcut-sub').innerHTML = `<span style="color:var(--ok)">已创建</span> · ${escapeHtml(res.shortcutPath || '桌面 Antigravity (Proxy).lnk')}`;
+      const res = await api('/api/refresh-shell', 'POST', {});
+      $('refresh-shell-sub').textContent = res.coodeskerRunning
+        ? 'Explorer 已刷新（若用 Coodesker 请重启 Coodesker）'
+        : 'Explorer 已刷新';
       if (res.status) {
         state = res.status;
         renderAll();
       }
-    } catch (err) {
-      $('shortcut-sub').innerHTML = `<span style="color:var(--danger)">生成失败: ${escapeHtml(err.message)}</span>`;
     } finally {
       btn.disabled = false;
-      btn.textContent = '生成快捷方式';
+      btn.textContent = '刷新桌面';
     }
   });
 

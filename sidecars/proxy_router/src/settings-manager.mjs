@@ -376,4 +376,22 @@ export class SettingsManager {
     }
     return conflicts;
   }
+
+  refreshDesktopShell() {
+    if (process.platform !== 'win32') {
+      throw new Error('Desktop shell refresh is supported on Windows only');
+    }
+    const psScript = [
+      '$coodesker = @(Get-Process -Name "coodesker-x64" -ErrorAction SilentlyContinue).Count -gt 0',
+      'Get-Process -Name "explorer" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue',
+      'Start-Process "explorer.exe" | Out-Null',
+      'Write-Output $coodesker',
+    ].join('; ');
+    const out = execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', psScript],
+      { encoding: 'utf8', windowsHide: true, timeout: 6000 }
+    ).trim();
+    return { ok: true, coodeskerRunning: /^true$/i.test(out) };
+  }
 }
