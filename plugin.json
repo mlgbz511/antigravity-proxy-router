@@ -1,0 +1,12 @@
+{
+  "name": "antigravity-proxy-router",
+  "displayName": "Antigravity Proxy Router",
+  "version": "1.0.0",
+  "description": "Telegram-style domain-aware proxy router replacing Proxifier for Antigravity services. Supports multi-proxy management, auto domain capture, health monitoring, Geo-Guard strict mode, and agy CLI compatibility.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Show proxy router status and current exit region",
+    "Test if my proxy is working for Antigravity domains",
+    "Open the Proxy Router control panel"
+  ]
+}

@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Proxy Router</title>
+<style>
+  :root {
+    --header-height: 48px;
+    --statsbar-height: 28px;
+    --tabbar-height: 38px;
+    --chrome-height: calc(var(--header-height) + var(--statsbar-height) + var(--tabbar-height));
+    --container-max: 1080px;
+    --scrollbar-size: 6px;
+    --scrollbar-radius: 3px;
+    --scrollbar-thumb: #3c4d60;
+    --scrollbar-thumb-hover: #5288c1;
+
+    --bg-base: #17212b;
+    --bg-surface: #0e1621;
+    --bg-elevated: #202b36;
+    --bg-hover: #24303d;
+    --border: #263342;
+    --text-primary: #f5f5f5;
+    --text-secondary: #76889b;
+    --text-muted: #58697a;
+    --accent: #5288c1;
+    --accent-hover: #649bd4;
+    --accent-soft: rgba(82, 136, 193, 0.16);
+    --ok: #4ec981;
+    --ok-soft: rgba(78, 201, 129, 0.14);
+    --danger: #e56464;
+    --danger-soft: rgba(229, 100, 100, 0.14);
+    --warn: #e5a94c;
+    --warn-soft: rgba(229, 169, 76, 0.15);
+    --radius: 8px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --scrollbar-thumb: #c4ced8;
+      --scrollbar-thumb-hover: #2481cc;
+      --bg-base: #f2f4f7;
+      --bg-surface: #ffffff;
+      --bg-elevated: #f7f9fb;
+      --bg-hover: #edf2f7;
+      --border: #dce3ec;
+      --text-primary: #18222d;
+      --text-secondary: #5c6e80;
+      --text-muted: #8b9bad;
+      --accent: #2481cc;
+      --accent-hover: #1d6fb3;
+      --accent-soft: rgba(36, 129, 204, 0.12);
+      --ok: #1b9651;
+      --ok-soft: rgba(27, 150, 81, 0.11);
+      --danger: #d13b3b;
+      --danger-soft: rgba(209, 59, 59, 0.10);
+      --warn: #b77009;
+      --warn-soft: rgba(183, 112, 9, 0.12);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 1. Fixed Top Header */
+  .app-header {
+    height: var(--header-height);
+    flex: 0 0 var(--header-height);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+  }
+
+  .chrome-inner {
+    width: 100%;
+    max-width: var(--container-max);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .status-dot.on { background: var(--ok); }
+  .status-dot.err { background: var(--danger); }
+
+  .app-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .port-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  /* 2. Fixed Live Traffic & Policy Bar */
+  .stats-bar {
+    height: var(--statsbar-height);
+    flex: 0 0 var(--statsbar-height);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .traffic-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rate-up { color: var(--accent); }
+  .rate-down { color: var(--ok); }
+
+  /* 3. Fixed 4-Tab Navigation */
+  .tab-bar {
+    height: var(--tabbar-height);
+    flex: 0 0 var(--tabbar-height);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    display: flex;
+    align-items: stretch;
+  }
+
+  .tab-bar-inner {
+    width: 100%;
+    max-width: var(--container-max);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .tab-btn {
+    appearance: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 4px;
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .tab-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 5px;
+    line-height: 15px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* 4. Single Scrollport Law */
+  .scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: calc(100vh - var(--chrome-height));
+    max-height: calc(100vh - var(--chrome-height));
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px;
+  }
+
+  .scroll-inner {
+    width: 100%;
+    max-width: var(--container-max);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible;
+  }
+
+  .scroll-body::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
+  .scroll-body::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--scrollbar-radius); }
+  .scroll-body::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+  .scroll-body::-webkit-scrollbar-track { background: transparent; }
+
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible;
+  }
+
+  .stack-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .badge.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  .banner {
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .banner.danger { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(229, 100, 100, 0.35); }
+  .banner.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid rgba(229, 169, 76, 0.35); }
+
+  .section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: visible;
+  }
+
+  .section-head {
+    padding: 10px 12px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.01em;
+  }
+
+  .section-hint {
+    padding: 6px 12px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+    background: var(--bg-elevated);
+    border-bottom-left-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+  }
+
+  /* Telegram list rows */
+  .tg-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 140ms ease;
+  }
+  .tg-row:hover { background: var(--bg-hover); }
+  .tg-row:active { background: var(--bg-elevated); }
+  .tg-row + .tg-row { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+  @media (prefers-color-scheme: light) {
+    .tg-row + .tg-row { border-top: 1px solid rgba(0, 0, 0, 0.05); }
+  }
+
+  .proxy-card {
+    padding: 9px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 140ms ease;
+    border-top: 1px solid var(--border);
+  }
+  .proxy-card:hover { background: var(--bg-hover); }
+  .proxy-card .radio-dot { margin-top: 2px; }
+
+  .tg-row-main { flex: 1; min-width: 0; }
+  .tg-row-label {
+    font-size: 13px;
+    color: var(--text-primary);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tg-row-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .tg-row-sub.connected { color: var(--ok); }
+  .tg-row-sub.err { color: var(--danger); }
+
+  .proxy-speed-line {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+  }
+
+  .proxy-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .proxy-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  @media (min-width: 680px) {
+    .proxy-card {
+      align-items: center;
+    }
+    .proxy-card .radio-dot {
+      margin-top: 0;
+    }
+    .proxy-card-body {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .proxy-actions {
+      margin-top: 0;
+      flex-shrink: 0;
+    }
+  }
+
+  @media (min-width: 840px) {
+    .app-header,
+    .stats-bar {
+      padding: 0 24px;
+    }
+    .tab-bar {
+      padding: 0 24px;
+    }
+    .tab-bar-inner {
+      display: flex;
+      justify-content: flex-start;
+      gap: 4px;
+    }
+    .tab-btn {
+      padding: 0 18px;
+      font-size: 13px;
+    }
+    .scroll-body {
+      padding: 20px 24px;
+    }
+    .scroll-inner,
+    .stack-col {
+      gap: 16px;
+    }
+    #panel-proxies {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    #panel-guard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    #panel-logs {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .rules-grid .rule-item:nth-child(odd) {
+      border-right: 1px solid var(--border);
+    }
+    .rules-grid .empty-state {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .radio-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 150ms ease;
+  }
+  .radio-dot.checked { border-color: var(--accent); }
+  .radio-dot.checked::after {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .check-box {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 150ms ease;
+  }
+  .check-box.checked { background: var(--accent); border-color: var(--accent); }
+  .check-box.checked::after {
+    content: "";
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(42deg) translate(-1px, -1px);
+  }
+
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--text-muted); }
+  .btn:active:not(:disabled) { opacity: 0.85; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+  .btn-danger { color: var(--danger); border-color: rgba(229, 100, 100, 0.35); background: transparent; }
+  .btn-danger:hover:not(:disabled) { background: var(--danger-soft); }
+
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--accent); padding: 4px 8px; }
+  .btn-ghost:hover:not(:disabled) { background: var(--accent-soft); }
+
+  .btn-sm { padding: 3px 7px; font-size: 11px; }
+
+  .input, .select, .textarea {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    outline: none;
+    min-width: 0;
+  }
+  .input:focus, .select:focus, .textarea:focus { border-color: var(--accent); }
+  .input-mono { font-family: var(--font-mono); }
+
+  .row-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+  .section-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .inline-form {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-elevated);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .form-field { display: flex; flex-direction: column; gap: 3px; }
+  .form-label { font-size: 11px; color: var(--text-secondary); }
+
+  .segmented {
+    display: inline-flex;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .seg-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .seg-btn.active { background: var(--accent); color: #fff; }
+
+  /* Country chips */
+  .country-panel {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .country-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
+  .chip.active-allow { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+  .chip.active-block { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); font-weight: 600; }
+
+  .country-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .country-input-row .input { flex: 1; text-transform: uppercase; }
+
+  .takeover-row {
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .toolbar {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .toolbar .input { flex: 1; min-width: 110px; }
+
+  .rule-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .rule-item.disabled .rule-domain { color: var(--text-muted); text-decoration: line-through; }
+  .rule-domain {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .rule-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .log-filters {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .log-cats {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .cat-pill {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .cat-pill:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .cat-pill.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+  .log-item {
+    padding: 7px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .log-host-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .log-host {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 1px 6px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .log-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+  }
+
+  .empty-state {
+    padding: 14px 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .probe-result {
+    padding: 6px 12px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="chrome-inner">
+      <div class="header-left">
+        <span id="hdr-dot" class="status-dot" title="网关状态"></span>
+        <span class="app-title">Proxy Router</span>
+        <span id="hdr-port" class="port-tag">:17890</span>
+      </div>
+      <div class="header-right">
+        <span id="hdr-geo" class="badge">--</span>
+        <button id="hdr-strict-btn" class="btn btn-sm" type="button" title="切换严格地区风控熔断">严格模式: 关</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="chrome-inner">
+      <div class="traffic-group">
+        <span class="rate-up" id="stat-up">↑ 0 B/s</span>
+        <span class="rate-down" id="stat-down">↓ 0 B/s</span>
+        <span id="stat-total">累计 0 B</span>
+      </div>
+      <div class="row-actions">
+        <span id="stat-g204" class="badge hidden">204</span>
+        <span id="stat-policy" class="badge accent">白名单</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tab-bar" role="tablist" aria-label="功能分区">
+    <div class="tab-bar-inner">
+      <button class="tab-btn active" role="tab" aria-selected="true" data-tab="proxies" type="button">代理</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-tab="guard" type="button">风控与接管</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-tab="rules" type="button">分流规则</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-tab="logs" type="button">日志<span id="new-domain-count" class="tab-pill hidden">0</span></button>
+    </div>
+  </nav>
+
+  <main class="scroll-body">
+    <div class="scroll-inner">
+    <div id="geo-banner" class="banner danger hidden"></div>
+    <div id="conflict-banner" class="banner warn hidden"></div>
+    <div id="env-stale-banner" class="banner warn hidden" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <span id="env-stale-text"></span>
+      <button id="banner-relaunch-btn" class="btn btn-primary btn-sm" type="button">带代理重启客户端</button>
+    </div>
+
+    <!-- TAB 1: Proxies & Connection Mode -->
+    <div id="panel-proxies" class="tab-panel">
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">代理设置</span>
+          <span id="conn-summary" class="badge">自定义代理</span>
+        </div>
+
+        <div class="tg-row" data-conn-mode="disabled" role="radio" tabindex="0">
+          <span class="radio-dot" id="rad-disabled"></span>
+          <div class="tg-row-main"><span class="tg-row-label">停用代理（全部直连）</span></div>
+        </div>
+        <div class="tg-row" data-conn-mode="custom" role="radio" tabindex="0">
+          <span class="radio-dot" id="rad-custom"></span>
+          <div class="tg-row-main"><span class="tg-row-label">使用自定义代理</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">代理服务器列表</span>
+          <button id="test-all-btn" class="btn btn-ghost btn-sm" type="button">全部测通</button>
+        </div>
+
+        <div id="proxy-list"></div>
+
+        <div id="proxy-form" class="inline-form hidden">
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label" for="pf-protocol">协议</label>
+              <select id="pf-protocol" class="select">
+                <option value="socks5">SOCKS5</option>
+                <option value="http">HTTP</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="pf-label">备注名称</label>
+              <input id="pf-label" class="input" type="text" placeholder="V2rayN" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="pf-host">服务器地址</label>
+              <input id="pf-host" class="input input-mono" type="text" value="127.0.0.1" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="pf-port">端口</label>
+              <input id="pf-port" class="input input-mono" type="number" value="10808" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="pf-user">用户名 (可选)</label>
+              <input id="pf-user" class="input" type="text" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="pf-pass">密码 (可选)</label>
+              <input id="pf-pass" class="input" type="password" />
+            </div>
+          </div>
+          <div class="row-actions" style="justify-content: flex-end;">
+            <button id="pf-cancel-btn" class="btn btn-sm" type="button">取消</button>
+            <button id="pf-save-btn" class="btn btn-primary btn-sm" type="button">保存代理</button>
+          </div>
+        </div>
+
+        <div class="section-footer">
+          <button id="toggle-add-proxy-btn" class="btn btn-ghost" type="button">+ 添加代理</button>
+          <span class="tg-row-sub">主延迟按真连接 1×RTT 测算；测速仅手动触发</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 2: Geo-Guard, Daemon & Client Takeover -->
+    <div id="panel-guard" class="tab-panel hidden">
+      <div class="stack-col">
+        <section class="section">
+          <div class="section-head">
+            <span class="section-title">常驻守护与自启</span>
+            <span id="daemon-mode-badge" class="badge">Sidecar 模式</span>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">后台常驻守护 (:17890 / :17891)</span>
+              <div id="daemon-status-sub" class="tg-row-sub">http://127.0.0.1:17891</div>
+            </div>
+            <button id="daemon-toggle-btn" class="btn btn-primary btn-sm" type="button">启动常驻</button>
+          </div>
+
+          <div class="tg-row" id="opt-autostart" role="checkbox" aria-checked="false" tabindex="0">
+            <span class="check-box" id="chk-autostart"></span>
+            <div class="tg-row-main">
+              <span class="tg-row-label">Windows 登录自启</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <span class="section-title">客户端接管与连接</span>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">Antigravity &amp; agy CLI (HTTPS_PROXY)</span>
+              <div id="env-takeover-sub" class="tg-row-sub">检测中...</div>
+            </div>
+            <button id="env-takeover-btn" class="btn btn-primary btn-sm" type="button">写入</button>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">带代理重启 Antigravity</span>
+            </div>
+            <button id="launch-agy-btn" class="btn btn-primary btn-sm" type="button">重启客户端</button>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">桌面代理快捷方式</span>
+              <div id="shortcut-sub" class="tg-row-sub">Antigravity (Proxy).lnk</div>
+            </div>
+            <button id="create-shortcut-btn" class="btn btn-sm" type="button">生成快捷方式</button>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
+              <span class="tg-row-label">IDE 扩展代理 (settings.json)</span>
+              <div id="settings-takeover-sub" class="tg-row-sub">检测中...</div>
+            </div>
+            <button id="settings-takeover-btn" class="btn btn-sm" type="button">接管</button>
+          </div>
+
+          <div class="tg-row" id="opt-autoswitch" role="checkbox" aria-checked="true" tabindex="0">
+            <span class="check-box" id="chk-autoswitch"></span>
+            <div class="tg-row-main">
+              <span class="tg-row-label">自动切换代理</span>
+            </div>
+          </div>
+
+          <div class="tg-row" id="opt-ipv6" role="checkbox" aria-checked="false" tabindex="0">
+            <span class="check-box" id="chk-ipv6"></span>
+            <div class="tg-row-main">
+              <span class="tg-row-label">尝试通过 IPv6 连接</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">地区合规风控 (Geo-Guard)</span>
+          <div class="segmented" role="group" aria-label="地区校验模式">
+            <button id="geo-whitelist-btn" class="seg-btn" type="button">白名单放行</button>
+            <button id="geo-blacklist-btn" class="seg-btn" type="button">黑名单拦截</button>
+          </div>
+        </div>
+
+        <div class="tg-row" id="opt-strict" role="checkbox" aria-checked="false" tabindex="0">
+          <span class="check-box" id="chk-strict"></span>
+          <div class="tg-row-main">
+            <span class="tg-row-label">严格模式（不合规即 503 熔断）</span>
+          </div>
+        </div>
+
+        <div class="country-panel">
+          <div id="country-panel-desc" class="tg-row-sub">允许国家码：</div>
+          <div id="country-chips" class="country-chips"></div>
+          <div class="country-input-row">
+            <input id="countries-input" class="input input-mono" type="text" placeholder="US, JP, SG..." />
+            <button id="save-countries-btn" class="btn btn-primary btn-sm" type="button">保存</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 3: Routing Rules -->
+    <div id="panel-rules" class="tab-panel hidden">
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">分流策略</span>
+          <div class="segmented" role="group" aria-label="分流模式">
+            <button id="mode-rule-btn" class="seg-btn" type="button">规则分流</button>
+            <button id="mode-global-btn" class="seg-btn" type="button">全局代理</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input id="new-rule-domain" class="input input-mono" type="text" placeholder="添加域名 (如 antigravity.google)" />
+          <select id="new-rule-type" class="select">
+            <option value="suffix">后缀匹配</option>
+            <option value="exact">精确匹配</option>
+            <option value="wildcard">通配符</option>
+          </select>
+          <button id="add-rule-btn" class="btn btn-primary btn-sm" type="button">添加</button>
+        </div>
+
+        <div class="toolbar" style="padding-top: 6px; padding-bottom: 6px;">
+          <input id="rule-filter" class="input" type="text" placeholder="筛选规则..." />
+          <button id="toggle-bulk-btn" class="btn btn-sm" type="button">批量粘贴</button>
+          <button id="toggle-rules-expand-btn" class="btn btn-sm" type="button">展开全部</button>
+          <button id="reset-rules-btn" class="btn btn-sm" type="button">重置默认</button>
+        </div>
+
+        <div id="bulk-box" class="inline-form hidden">
+          <textarea id="bulk-text" class="textarea input-mono" rows="4" placeholder="每行或用逗号分隔多个域名..."></textarea>
+          <div class="row-actions" style="justify-content: flex-end;">
+            <button id="bulk-cancel-btn" class="btn btn-sm" type="button">取消</button>
+            <button id="bulk-save-btn" class="btn btn-primary btn-sm" type="button">批量导入</button>
+          </div>
+        </div>
+
+        <div id="rules-list" class="rules-grid"></div>
+      </section>
+    </div>
+
+    <!-- TAB 4: Logs & Domain Probe -->
+    <div id="panel-logs" class="tab-panel hidden">
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">域名路由探测</span>
+        </div>
+        <div class="toolbar">
+          <input id="probe-domain-input" class="input input-mono" type="text" placeholder="输入域名测试命中规则..." />
+          <button id="probe-domain-btn" class="btn btn-sm" type="button">探测</button>
+        </div>
+        <div id="probe-result" class="probe-result hidden"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="segmented" role="tablist" aria-label="连接视图">
+            <button id="view-active-btn" class="seg-btn" type="button" data-log-view="active">活跃 0</button>
+            <button id="view-closed-btn" class="seg-btn active" type="button" data-log-view="closed">已关闭 0</button>
+          </div>
+          <div class="row-actions">
+            <button id="toggle-log-dedup-btn" class="btn btn-sm btn-primary" type="button" title="按域名与路由结果合并重复请求">已去重</button>
+            <button id="refresh-logs-btn" class="btn btn-sm" type="button">刷新</button>
+            <button id="clear-logs-btn" class="btn btn-sm" type="button">清空</button>
+          </div>
+        </div>
+        <div id="log-filters" class="log-filters">
+          <div class="log-cats" id="log-cats" role="tablist" aria-label="日志分类">
+            <button class="cat-pill active" type="button" data-log-cat="all">全部 (0)</button>
+            <button class="cat-pill" type="button" data-log-cat="proxy">走代理 (0)</button>
+            <button class="cat-pill" type="button" data-log-cat="direct">直连 (0)</button>
+            <button class="cat-pill" type="button" data-log-cat="error">异常/熔断 (0)</button>
+            <button class="cat-pill" type="button" data-log-cat="new">未加规则 (0)</button>
+          </div>
+          <input id="log-filter-input" class="input input-mono" type="text" placeholder="筛选域名、进程或错误信息..." />
+        </div>
+        <div id="active-conns-list" class="hidden"></div>
+        <div id="logs-list"></div>
+      </section>
+    </div>
+    </div>
+  </main>
+
+<script>
+(() => {
+  const PRESET_WHITELIST_TAGS = ['US', 'JP', 'SG', 'TW', 'GB', 'DE', 'CA', 'AU', 'KR', 'NL'];
+  const PRESET_BLACKLIST_TAGS = ['CN', 'HK', 'MO', 'RU', 'BY', 'IR', 'KP', 'CU', 'SY'];
+
+  let state = null;
+  let lastLogs = [];
+  let lastConnections = [];
+  let activeTab = 'proxies';
+  let editingProxyId = null;
+  let rulesExpanded = false;
+  let ruleFilterText = '';
+  let logView = 'closed';
+  let logCategory = 'all';
+  let logDedupe = true;
+  let logFilterText = '';
+
+  const $ = (id) => document.getElementById(id);
+
+  async function api(url, method = 'GET', body = null) {
+    const opts = { method, headers: {} };
+    if (body !== null) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatRate(bps) {
+    const n = Number(bps) || 0;
+    if (n < 1024) return `${n} B/s`;
+    if (n < 1048576) return `${(n / 1024).toFixed(1)} KB/s`;
+    return `${(n / 1048576).toFixed(2)} MB/s`;
+  }
+
+  function formatBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} B`;
+    if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1073741824) return `${(n / 1048576).toFixed(1)} MB`;
+    return `${(n / 1073741824).toFixed(2)} GB`;
+  }
+
+  function isDomainInRules(host) {
+    if (!state?.config?.rules || !host) return false;
+    const h = host.toLowerCase();
+    return state.config.rules.some(r => {
+      if (!r.enabled) return false;
+      const p = r.domain.toLowerCase();
+      if (r.type === 'exact') return h === p;
+      if (r.type === 'suffix') return h === p || h.endsWith('.' + p);
+      return h === p;
+    });
+  }
+
+  function switchTab(tabId) {
+    activeTab = tabId;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const isAct = btn.dataset.tab === tabId;
+      btn.classList.toggle('active', isAct);
+      btn.setAttribute('aria-selected', String(isAct));
+    });
+    ['proxies', 'guard', 'rules', 'logs'].forEach(id => {
+      $(`panel-${id}`).classList.toggle('hidden', id !== tabId);
+    });
+  }
+
+  function renderHeaderAndStats() {
+    const gw = state.gateway;
+    const dot = $('hdr-dot');
+    dot.className = 'status-dot ' + (gw.listening ? 'on' : 'err');
+    dot.title = gw.listening ? `监听中 ${gw.host}:${gw.port}` : (gw.error || '未监听');
+    $('hdr-port').textContent = `:${gw.port}`;
+
+    const activeId = state.config.activeProxyId;
+    const activeSt = activeId ? state.health[activeId] : null;
+    const geoBadge = $('hdr-geo');
+
+    if (state.config.connectionMode === 'disabled') {
+      geoBadge.className = 'badge';
+      geoBadge.textContent = '直连';
+    } else if (state.geoBlocked) {
+      geoBadge.className = 'badge danger';
+      geoBadge.textContent = state.activeCountry ? `${state.activeCountry} · 熔断` : '离线 · 熔断';
+    } else if (state.activeCountry) {
+      const lat = activeSt?.latencyMs ? ` · ${activeSt.latencyMs}ms` : '';
+      geoBadge.className = 'badge ok';
+      geoBadge.textContent = `${state.activeCountry}${lat}`;
+    } else {
+      geoBadge.className = 'badge';
+      geoBadge.textContent = '待检测';
+    }
+
+    const strictOn = Boolean(state.config.options.strictGeoGuard);
+    const strictBtn = $('hdr-strict-btn');
+    strictBtn.textContent = strictOn ? '严格模式: 开' : '严格模式: 关';
+    strictBtn.className = strictOn ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+
+    // Traffic stats bar
+    const tf = state.traffic || {};
+    $('stat-up').textContent = `↑ ${formatRate(tf.uploadBps)}`;
+    $('stat-down').textContent = `↓ ${formatRate(tf.downloadBps)}`;
+    $('stat-total').textContent = `累计 ${formatBytes((tf.totalUpBytes || 0) + (tf.totalDownBytes || 0))}`;
+
+    const g204El = $('stat-g204');
+    if (activeSt && activeSt.google204Ok !== null && activeSt.google204Ok !== undefined) {
+      g204El.classList.remove('hidden');
+      if (activeSt.google204Ok) {
+        g204El.className = 'badge ok';
+        g204El.textContent = `204 · ${activeSt.googleLatencyMs || activeSt.latencyMs || '-'}ms`;
+      } else {
+        g204El.className = 'badge warn';
+        g204El.textContent = '204 不通';
+      }
+    } else {
+      g204El.classList.add('hidden');
+    }
+
+    const opts = state.config.options || {};
+    const mode = opts.geoPolicyMode || 'whitelist';
+    const policyEl = $('stat-policy');
+    if (mode === 'whitelist') {
+      policyEl.className = 'badge accent';
+      policyEl.textContent = `白名单(${(opts.allowedCountries || []).length})`;
+    } else {
+      policyEl.className = 'badge warn';
+      policyEl.textContent = `黑名单(${(opts.blockedCountries || []).length})`;
+    }
+  }
+
+  function renderBanners() {
+    const geoBanner = $('geo-banner');
+    if (state.geoBlocked) {
+      geoBanner.classList.remove('hidden');
+      const modeText = (state.config.options.geoPolicyMode || 'whitelist') === 'whitelist' ? '未命中白名单' : '命中黑名单';
+      geoBanner.textContent = `严格风控已熔断：当前出口 (${state.activeCountry || '未知/离线'}) ${modeText}，云端请求已被本地 503 拦截。`;
+    } else {
+      geoBanner.classList.add('hidden');
+    }
+
+    const conflictBanner = $('conflict-banner');
+    if (state.envConflicts && state.envConflicts.length > 0) {
+      conflictBanner.classList.remove('hidden');
+      const items = state.envConflicts.map(c => `${c.key}=${c.value}`).join('；');
+      conflictBanner.textContent = `检测到进程环境代理变量：${items}`;
+    } else {
+      conflictBanner.classList.add('hidden');
+    }
+
+    const staleBanner = $('env-stale-banner');
+    const he = state.hostEnv;
+    const tk = state.takeover;
+    if (state.config.connectionMode === 'custom' && he && he.reportedBySidecar && !he.effective) {
+      staleBanner.classList.remove('hidden');
+      $('env-stale-text').textContent = tk?.envTakenOver
+        ? '当前 Antigravity 进程未继承 HTTPS_PROXY（常见于桌面/Coodesker 缓存旧环境变量），请点右侧「带代理重启客户端」立即注入。'
+        : '当前 Antigravity 进程未设置 HTTPS_PROXY，请先在「风控与接管」写入环境变量或直接点右侧「带代理重启客户端」。';
+    } else {
+      staleBanner.classList.add('hidden');
+    }
+  }
+
+  function renderProxiesTab() {
+    const cfg = state.config;
+    const modeNames = { disabled: '已停用', custom: '自定义代理' };
+    $('conn-summary').textContent = modeNames[cfg.connectionMode] || cfg.connectionMode;
+    ['disabled', 'custom'].forEach(m => {
+      $(`rad-${m}`).classList.toggle('checked', cfg.connectionMode === m);
+    });
+
+    const list = $('proxy-list');
+    if (!cfg.proxies.length) {
+      list.innerHTML = '<div class="empty-state">暂无自定义代理，点击下方添加</div>';
+      return;
+    }
+
+    list.innerHTML = cfg.proxies.map(p => {
+      const isActive = cfg.activeProxyId === p.id && cfg.connectionMode === 'custom';
+      const st = state.health[p.id] || { status: 'unknown' };
+      let subText = '未检测';
+      let subClass = 'tg-row-sub';
+
+      if (st.status === 'connected') {
+        const parts = ['已连接'];
+        if (st.country) parts.push(st.country);
+        if (st.latencyMs !== null) parts.push(`${st.latencyMs}ms`);
+        if (st.google204Ok === true) parts.push('204正常');
+        else if (st.google204Ok === false) parts.push('204异常');
+        if (st.exitIp) parts.push(st.exitIp);
+        subText = parts.join(' · ');
+        subClass = 'tg-row-sub connected';
+      } else if (st.status === 'geo_blocked') {
+        subText = `地区不合规 (${st.country || '未知'})${st.exitIp ? ' · ' + st.exitIp : ''}`;
+        subClass = 'tg-row-sub err';
+      } else if (st.status === 'unavailable') {
+        subText = `不可用${st.error ? ' (' + st.error + ')' : ''}`;
+        subClass = 'tg-row-sub err';
+      }
+
+      const speedParts = [];
+      if (st.downloadMbps !== null && st.downloadMbps !== undefined) speedParts.push(`↓ ${st.downloadMbps} Mbps`);
+      if (st.uploadMbps !== null && st.uploadMbps !== undefined) speedParts.push(`↑ ${st.uploadMbps} Mbps`);
+      const speedLine = speedParts.length
+        ? `<div class="proxy-speed-line">带宽实测: ${escapeHtml(speedParts.join(' · '))}</div>`
+        : (st.speedTestError ? `<div class="proxy-speed-line" style="color:var(--warn)">测速失败: ${escapeHtml(st.speedTestError)}</div>` : '');
+
+      const title = `${p.protocol.toUpperCase()} ${p.host}:${p.port}${p.label ? ' · ' + p.label : ''}`;
+      return `
+        <div class="proxy-card" data-select-proxy="${escapeHtml(p.id)}">
+          <span class="radio-dot ${isActive ? 'checked' : ''}"></span>
+          <div class="proxy-card-body">
+            <div class="tg-row-main">
+              <span class="tg-row-label">${escapeHtml(title)}</span>
+              <div class="${subClass}">${escapeHtml(subText)}</div>
+              ${speedLine}
+            </div>
+            <div class="proxy-actions" data-stop-prop="1">
+              <button class="btn btn-sm" type="button" data-test-proxy="${escapeHtml(p.id)}">测通</button>
+              <button class="btn btn-sm" type="button" data-speedtest-proxy="${escapeHtml(p.id)}">测速</button>
+              <button class="btn btn-sm" type="button" data-edit-proxy="${escapeHtml(p.id)}">编辑</button>
+              <button class="btn btn-sm btn-danger" type="button" data-del-proxy="${escapeHtml(p.id)}">删除</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderGuardTab() {
+    const cfg = state.config;
+    const opts = cfg.options || {};
+    const mode = opts.geoPolicyMode || 'whitelist';
+
+    $('geo-whitelist-btn').classList.toggle('active', mode === 'whitelist');
+    $('geo-blacklist-btn').classList.toggle('active', mode === 'blacklist');
+    $('chk-strict').classList.toggle('checked', Boolean(opts.strictGeoGuard));
+    $('chk-autoswitch').classList.toggle('checked', Boolean(opts.autoSwitch));
+    $('chk-ipv6').classList.toggle('checked', Boolean(opts.tryIpv6));
+
+    const currentList = (mode === 'whitelist' ? opts.allowedCountries : opts.blockedCountries) || [];
+    const presetPool = mode === 'whitelist' ? PRESET_WHITELIST_TAGS : PRESET_BLACKLIST_TAGS;
+    const mergedTags = [...new Set([...presetPool, ...currentList])];
+
+    $('country-panel-desc').textContent = mode === 'whitelist' ? '允许国家码：' : '拦截国家码：';
+
+    $('country-chips').innerHTML = mergedTags.map(code => {
+      const selected = currentList.includes(code);
+      const cls = selected ? (mode === 'whitelist' ? 'chip active-allow' : 'chip active-block') : 'chip';
+      return `<button type="button" class="${cls}" data-country-chip="${escapeHtml(code)}">${escapeHtml(code)}</button>`;
+    }).join('');
+
+    const inputEl = $('countries-input');
+    if (document.activeElement !== inputEl) {
+      inputEl.value = currentList.join(', ');
+    }
+
+    const dm = state.daemon || {};
+    const dmBadge = $('daemon-mode-badge');
+    const dmSub = $('daemon-status-sub');
+    const dmBtn = $('daemon-toggle-btn');
+    if (dm.running) {
+      dmBadge.className = 'badge ok';
+      dmBadge.textContent = `常驻运行中 (PID ${dm.daemonPid || '?'})`;
+      dmSub.textContent = `浏览器控制台: ${dm.controlUrl || 'http://127.0.0.1:17891'}`;
+      dmBtn.textContent = '停止守护';
+      dmBtn.className = 'btn btn-sm btn-danger';
+    } else {
+      dmBadge.className = 'badge';
+      dmBadge.textContent = '仅 Sidecar 模式';
+      dmSub.textContent = '启动后 Antigravity 冷启动第 0 秒即走代理，不受 3 秒时序影响';
+      dmBtn.textContent = '启动常驻';
+      dmBtn.className = 'btn btn-sm btn-primary';
+    }
+    $('chk-autostart').classList.toggle('checked', Boolean(dm.autostartEnabled));
+
+    const tk = state.takeover;
+    const he = state.hostEnv;
+    const eSub = $('env-takeover-sub');
+    const eBtn = $('env-takeover-btn');
+    if (tk.envTakenOver) {
+      const liveHint = he?.reportedBySidecar
+        ? (he.effective
+          ? '<span style="color:var(--ok)">当前已生效</span>'
+          : '<span style="color:var(--warn)">当前未继承（需重启客户端）</span>')
+        : '重开客户端后生效';
+      eSub.innerHTML = `<span style="color:var(--ok)">已写入</span> · ${liveHint}`;
+      eBtn.textContent = '还原';
+      eBtn.className = 'btn btn-sm btn-danger';
+    } else {
+      eSub.textContent = tk.envHttpsProxy ? `当前: ${tk.envHttpsProxy}` : '未写入';
+      eBtn.textContent = '写入';
+      eBtn.className = 'btn btn-sm btn-primary';
+    }
+
+    const sSub = $('settings-takeover-sub');
+    const sBtn = $('settings-takeover-btn');
+    if (tk.settingsTakenOver) {
+      sSub.innerHTML = '<span style="color:var(--ok)">已接管</span> · ' + escapeHtml(tk.expectedUrl);
+      sBtn.textContent = '还原';
+      sBtn.className = 'btn btn-sm btn-danger';
+    } else {
+      sSub.textContent = tk.currentHttpProxy ? `当前: ${tk.currentHttpProxy}` : '未接管';
+      sBtn.textContent = '接管';
+      sBtn.className = 'btn btn-sm';
+    }
+  }
+
+  function renderRulesTab() {
+    const cfg = state.config;
+    $('mode-rule-btn').classList.toggle('active', cfg.routingMode === 'rule');
+    $('mode-global-btn').classList.toggle('active', cfg.routingMode === 'global');
+
+    const q = ruleFilterText.trim().toLowerCase();
+    const filtered = cfg.rules.filter(r => !q || r.domain.toLowerCase().includes(q));
+    const visible = (rulesExpanded || q) ? filtered : filtered.slice(0, 10);
+    $('toggle-rules-expand-btn').textContent = rulesExpanded ? `收起 (${filtered.length})` : `展开全部 (${filtered.length})`;
+
+    const rulesEl = $('rules-list');
+    if (cfg.routingMode === 'global') {
+      rulesEl.innerHTML = '<div class="empty-state">当前为「全局代理」模式：除本地回环/私网外，所有域名均走代理</div>';
+      return;
+    }
+    if (!visible.length) {
+      rulesEl.innerHTML = '<div class="empty-state">没有匹配的域名规则</div>';
+      return;
+    }
+    rulesEl.innerHTML = visible.map(r => `
+      <div class="rule-item ${r.enabled ? '' : 'disabled'}">
+        <span class="rule-domain" title="${escapeHtml(r.domain)}">${escapeHtml(r.domain)}</span>
+        <span class="rule-type">${escapeHtml(r.type)}</span>
+        <button class="btn btn-sm" type="button" data-toggle-rule="${escapeHtml(r.id)}">${r.enabled ? '禁用' : '启用'}</button>
+        <button class="btn btn-sm btn-danger" type="button" data-del-rule="${escapeHtml(r.id)}">删</button>
+      </div>
+    `).join('');
+  }
+
+  function classifyLog(l) {
+    if (l.route === 'BLOCKED' || l.status === 'error') return 'error';
+    if (l.route === 'PRIMARY') return 'proxy';
+    if (l.route === 'DIRECT') return 'direct';
+    return 'all';
+  }
+
+  function dedupeLogEntries(logs) {
+    const groups = new Map();
+    for (const l of logs) {
+      const bucket = l.status === 'error' ? 'err' : 'ok';
+      const key = `${l.host}:${l.port}|${l.route}|${bucket}`;
+      const existing = groups.get(key);
+      if (!existing) {
+        groups.set(key, {
+          ...l,
+          count: 1,
+          totalLatencyMs: Number(l.latencyMs) || 0,
+        });
+      } else {
+        existing.count += 1;
+        existing.totalLatencyMs += Number(l.latencyMs) || 0;
+        if (!existing.error && l.error) existing.error = l.error;
+        if (l.isNewDomain) existing.isNewDomain = true;
+      }
+    }
+    return Array.from(groups.values()).map(item => ({
+      ...item,
+      avgLatencyMs: Math.round(item.totalLatencyMs / item.count),
+    }));
+  }
+
+  function formatLocalTime(iso) {
+    if (!iso) return { short: '', full: '' };
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) {
+      const fallback = String(iso).slice(11, 19);
+      return { short: fallback, full: String(iso) };
+    }
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return { short: `${hh}:${mm}:${ss}`, full: d.toLocaleString() };
+  }
+
+  function formatDuration(ms) {
+    const s = Math.floor((Number(ms) || 0) / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ${s % 60}s`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+  }
+
+  function renderActiveConnections(conns) {
+    lastConnections = conns || [];
+    const activeBtn = $('view-active-btn');
+    const closedBtn = $('view-closed-btn');
+    if (activeBtn) {
+      activeBtn.textContent = `活跃 ${lastConnections.length}`;
+      activeBtn.classList.toggle('active', logView === 'active');
+    }
+    if (closedBtn) {
+      closedBtn.textContent = `已关闭 ${lastLogs.length}`;
+      closedBtn.classList.toggle('active', logView === 'closed');
+    }
+
+    const activeEl = $('active-conns-list');
+    const logsEl = $('logs-list');
+    const catsEl = $('log-cats');
+    const dedupBtn = $('toggle-log-dedup-btn');
+    if (logView === 'active') {
+      activeEl?.classList.remove('hidden');
+      logsEl?.classList.add('hidden');
+      catsEl?.classList.add('hidden');
+      dedupBtn?.classList.add('hidden');
+    } else {
+      activeEl?.classList.add('hidden');
+      logsEl?.classList.remove('hidden');
+      catsEl?.classList.remove('hidden');
+      dedupBtn?.classList.remove('hidden');
+      return;
+    }
+
+    const q = logFilterText.trim().toLowerCase();
+    const filtered = q
+      ? lastConnections.filter(c => `${c.host}:${c.port} ${c.processName || ''} ${c.proxyLabel || ''}`.toLowerCase().includes(q))
+      : lastConnections;
+
+    if (!filtered.length) {
+      activeEl.innerHTML = '<div class="empty-state">当前没有活跃连接</div>';
+      return;
+    }
+
+    activeEl.innerHTML = filtered.map(c => {
+      const badgeCls = c.route === 'PRIMARY' ? 'badge accent' : 'badge ok';
+      const procTag = c.processName ? `<span class="badge">${escapeHtml(c.processName)} (${c.pid})</span>` : '';
+      return `
+        <div class="log-item">
+          <div class="tg-row-main">
+            <div class="log-host-row">
+              <span class="log-host">${escapeHtml(c.host)}:${escapeHtml(c.port)}</span>
+              ${procTag}
+            </div>
+            <div class="log-meta">
+              <span class="${badgeCls}">${escapeHtml(c.route)}</span>
+              <span>${escapeHtml(c.proxyLabel || c.rule || '')}</span>
+              <span style="color:var(--ok)">↑ ${escapeHtml(formatBytes(c.upBytes))}</span>
+              <span style="color:var(--accent)">↓ ${escapeHtml(formatBytes(c.downBytes))}</span>
+              <span>${escapeHtml(formatDuration(c.durationMs))}</span>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-danger" type="button" data-close-conn="${escapeHtml(c.id)}">断开</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderLogs(logs) {
+    lastLogs = logs || [];
+    const closedBtn = $('view-closed-btn');
+    if (closedBtn) closedBtn.textContent = `已关闭 ${lastLogs.length}`;
+    const newHosts = new Set(lastLogs.filter(l => l.isNewDomain && !isDomainInRules(l.host)).map(l => l.host));
+    const badge = $('new-domain-count');
+    if (newHosts.size > 0) {
+      badge.textContent = String(newHosts.size);
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+
+    const dedupBtn = $('toggle-log-dedup-btn');
+    if (dedupBtn) {
+      dedupBtn.textContent = logDedupe ? '已去重' : '原始流水';
+      dedupBtn.className = logDedupe ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+      if (logView === 'active') dedupBtn.classList.add('hidden');
+    }
+
+    const q = logFilterText.trim().toLowerCase();
+    const baseEntries = logDedupe ? dedupeLogEntries(lastLogs) : lastLogs.map(l => ({ ...l, count: 1 }));
+    const searched = q
+      ? baseEntries.filter(l => `${l.host}:${l.port} ${l.rule || ''} ${l.proxyLabel || ''} ${l.error || ''}`.toLowerCase().includes(q))
+      : baseEntries;
+
+    const counts = { all: searched.length, proxy: 0, direct: 0, error: 0, new: 0 };
+    for (const l of searched) {
+      const cat = classifyLog(l);
+      if (cat === 'proxy') counts.proxy += 1;
+      else if (cat === 'direct') counts.direct += 1;
+      else if (cat === 'error') counts.error += 1;
+      if (l.isNewDomain && !isDomainInRules(l.host)) counts.new += 1;
+    }
+
+    const catLabels = { all: '全部', proxy: '走代理', direct: '直连', error: '异常/熔断', new: '未加规则' };
+    document.querySelectorAll('[data-log-cat]').forEach(btn => {
+      const cat = btn.dataset.logCat;
+      btn.textContent = `${catLabels[cat] || cat} (${counts[cat] ?? 0})`;
+      btn.classList.toggle('active', cat === logCategory);
+    });
+
+    const filtered = searched.filter(l => {
+      if (logCategory === 'all') return true;
+      if (logCategory === 'new') return l.isNewDomain && !isDomainInRules(l.host);
+      return classifyLog(l) === logCategory;
+    });
+
+    const el = $('logs-list');
+    if (!lastLogs.length) {
+      el.innerHTML = '<div class="empty-state">暂无请求记录（触发客户端流量或探针后在此显示）</div>';
+      return;
+    }
+    if (!filtered.length) {
+      el.innerHTML = '<div class="empty-state">当前分类或筛选条件下暂无匹配日志</div>';
+      return;
+    }
+    el.innerHTML = filtered.slice(0, 50).map(l => {
+      let badgeCls = 'badge';
+      if (l.route === 'BLOCKED' || l.status === 'error') badgeCls = 'badge danger';
+      else if (l.route === 'PRIMARY') badgeCls = 'badge accent';
+      else if (l.route === 'DIRECT') badgeCls = 'badge ok';
+
+      const timeInfo = formatLocalTime(l.time);
+      const procTag = l.processName ? `<span class="badge">${escapeHtml(l.processName)} (${l.pid})</span>` : '';
+      const stillNew = l.isNewDomain && !isDomainInRules(l.host);
+      const addBtn = stillNew
+        ? `<button class="btn btn-sm btn-primary" type="button" data-capture-domain="${escapeHtml(l.host)}">+ 加规则</button>`
+        : '';
+      const countPill = l.count > 1
+        ? `<span class="log-count" title="已合并 ${l.count} 次相同路径请求">×${l.count}</span>`
+        : '';
+      const latText = l.count > 1
+        ? `最新 ${l.latencyMs ?? 0}ms / 均 ${l.avgLatencyMs ?? 0}ms`
+        : `${l.latencyMs ?? 0}ms`;
+
+      return `
+        <div class="log-item">
+          <div class="tg-row-main">
+            <div class="log-host-row">
+              <span class="log-host">${escapeHtml(l.host)}:${escapeHtml(l.port)}</span>
+              ${countPill}
+              ${procTag}
+            </div>
+            <div class="log-meta">
+              <span class="${badgeCls}">${escapeHtml(l.route)}</span>
+              <span>${escapeHtml(l.protocol)}</span>
+              <span>${escapeHtml(l.proxyLabel || l.rule || '')}</span>
+              <span>${escapeHtml(latText)}</span>
+              <span title="${escapeHtml(timeInfo.full)}">${escapeHtml(timeInfo.short)}</span>
+              ${l.error ? `<span style="color:var(--danger)">${escapeHtml(l.error)}</span>` : ''}
+            </div>
+          </div>
+          ${addBtn}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAll() {
+    if (!state) return;
+    renderHeaderAndStats();
+    renderBanners();
+    renderProxiesTab();
+    renderGuardTab();
+    renderRulesTab();
+    renderLogs(lastLogs);
+  }
+
+  async function refreshStatus() {
+    state = await api('/api/status');
+    renderAll();
+  }
+
+  async function refreshLogs() {
+    const [{ logs }, connRes] = await Promise.all([
+      api('/api/logs'),
+      api('/api/connections').catch(() => ({ connections: [] })),
+    ]);
+    renderLogs(logs);
+    renderActiveConnections(connRes.connections || []);
+  }
+
+  // Tab navigation
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Header & Connection Settings
+  $('hdr-strict-btn').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', {
+      options: { strictGeoGuard: !state.config.options.strictGeoGuard },
+    });
+    renderAll();
+  });
+
+  document.querySelectorAll('[data-conn-mode]').forEach(el => {
+    el.addEventListener('click', async () => {
+      state = await api('/api/config', 'POST', { connectionMode: el.dataset.connMode });
+      renderAll();
+    });
+  });
+
+  // Geo-Guard tab events
+  $('geo-whitelist-btn').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { options: { geoPolicyMode: 'whitelist' } });
+    renderAll();
+  });
+  $('geo-blacklist-btn').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { options: { geoPolicyMode: 'blacklist' } });
+    renderAll();
+  });
+
+  $('opt-strict').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { options: { strictGeoGuard: !state.config.options.strictGeoGuard } });
+    renderAll();
+  });
+  $('opt-autoswitch').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { options: { autoSwitch: !state.config.options.autoSwitch } });
+    renderAll();
+  });
+  $('opt-ipv6').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { options: { tryIpv6: !state.config.options.tryIpv6 } });
+    renderAll();
+  });
+
+  $('country-chips').addEventListener('click', async (e) => {
+    const chip = e.target.closest('[data-country-chip]');
+    if (!chip) return;
+    const code = chip.dataset.countryChip;
+    const opts = state.config.options || {};
+    const mode = opts.geoPolicyMode || 'whitelist';
+    const key = mode === 'whitelist' ? 'allowedCountries' : 'blockedCountries';
+    const cur = [...(opts[key] || [])];
+    const idx = cur.indexOf(code);
+    if (idx === -1) cur.push(code);
+    else cur.splice(idx, 1);
+    state = await api('/api/config', 'POST', { options: { [key]: cur } });
+    renderAll();
+  });
+
+  $('save-countries-btn').addEventListener('click', async () => {
+    const raw = $('countries-input').value;
+    const list = raw.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    const mode = state.config.options?.geoPolicyMode || 'whitelist';
+    const key = mode === 'whitelist' ? 'allowedCountries' : 'blockedCountries';
+    state = await api('/api/config', 'POST', { options: { [key]: list } });
+    renderAll();
+  });
+
+  // Proxy list delegation
+  $('proxy-list').addEventListener('click', async (e) => {
+    const testBtn = e.target.closest('[data-test-proxy]');
+    if (testBtn) {
+      testBtn.disabled = true;
+      testBtn.textContent = '测通中';
+      try {
+        state = await api('/api/proxies/test', 'POST', { id: testBtn.dataset.testProxy });
+        renderAll();
+      } finally {
+        testBtn.disabled = false;
+      }
+      return;
+    }
+
+    const speedBtn = e.target.closest('[data-speedtest-proxy]');
+    if (speedBtn) {
+      speedBtn.disabled = true;
+      speedBtn.textContent = '测速中...';
+      try {
+        state = await api('/api/proxies/speedtest', 'POST', { id: speedBtn.dataset.speedtestProxy });
+        renderAll();
+      } finally {
+        speedBtn.disabled = false;
+      }
+      return;
+    }
+
+    const editBtn = e.target.closest('[data-edit-proxy]');
+    if (editBtn) {
+      const p = state.config.proxies.find(item => item.id === editBtn.dataset.editProxy);
+      if (!p) return;
+      editingProxyId = p.id;
+      $('pf-protocol').value = p.protocol;
+      $('pf-label').value = p.label || '';
+      $('pf-host').value = p.host;
+      $('pf-port').value = p.port;
+      $('pf-user').value = p.username || '';
+      $('pf-pass').value = p.password || '';
+      $('proxy-form').classList.remove('hidden');
+      return;
+    }
+
+    const delBtn = e.target.closest('[data-del-proxy]');
+    if (delBtn) {
+      state = await api('/api/proxies', 'POST', { action: 'delete', id: delBtn.dataset.delProxy });
+      renderAll();
+      return;
+    }
+
+    const card = e.target.closest('[data-select-proxy]');
+    if (card && !e.target.closest('[data-stop-prop]')) {
+      const id = card.dataset.selectProxy;
+      await api('/api/config', 'POST', { connectionMode: 'custom' });
+      state = await api('/api/proxies', 'POST', { action: 'set-active', id });
+      renderAll();
+    }
+  });
+
+  $('toggle-add-proxy-btn').addEventListener('click', () => {
+    editingProxyId = null;
+    $('pf-protocol').value = 'socks5';
+    $('pf-label').value = '';
+    $('pf-host').value = '127.0.0.1';
+    $('pf-port').value = '10808';
+    $('pf-user').value = '';
+    $('pf-pass').value = '';
+    $('proxy-form').classList.toggle('hidden');
+  });
+  $('pf-cancel-btn').addEventListener('click', () => {
+    editingProxyId = null;
+    $('proxy-form').classList.add('hidden');
+  });
+  $('pf-save-btn').addEventListener('click', async () => {
+    const payload = {
+      action: editingProxyId ? 'update' : 'add',
+      id: editingProxyId || undefined,
+      protocol: $('pf-protocol').value,
+      label: $('pf-label').value.trim(),
+      host: $('pf-host').value.trim() || '127.0.0.1',
+      port: parseInt($('pf-port').value, 10) || 10808,
+      username: $('pf-user').value,
+      password: $('pf-pass').value,
+    };
+    state = await api('/api/proxies', 'POST', payload);
+    editingProxyId = null;
+    $('proxy-form').classList.add('hidden');
+    renderAll();
+  });
+
+  $('test-all-btn').addEventListener('click', async () => {
+    const btn = $('test-all-btn');
+    btn.disabled = true;
+    btn.textContent = '测通中...';
+    try {
+      state = await api('/api/proxies/test', 'POST', {});
+      renderAll();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '全部测通';
+    }
+  });
+
+  // Daemon & Takeover buttons
+  $('daemon-toggle-btn').addEventListener('click', async () => {
+    const btn = $('daemon-toggle-btn');
+    const action = state.daemon?.running ? 'stop' : 'start';
+    btn.disabled = true;
+    btn.textContent = action === 'start' ? '启动中...' : '停止中...';
+    try {
+      state = await api('/api/daemon', 'POST', { action });
+      renderAll();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $('opt-autostart').addEventListener('click', async () => {
+    const action = state.daemon?.autostartEnabled ? 'autostart-off' : 'autostart-on';
+    state = await api('/api/daemon', 'POST', { action });
+    renderAll();
+  });
+  $('settings-takeover-btn').addEventListener('click', async () => {
+    const action = state.takeover.settingsTakenOver ? 'restore' : 'enable';
+    state = await api('/api/takeover', 'POST', { target: 'settings', action });
+    renderAll();
+  });
+  $('env-takeover-btn').addEventListener('click', async () => {
+    const action = state.takeover.envTakenOver ? 'restore' : 'enable';
+    state = await api('/api/takeover', 'POST', { target: 'env', action });
+    renderAll();
+  });
+  async function relaunchAntigravity(btn) {
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '重启中...';
+    try {
+      const res = await api('/api/launch-antigravity', 'POST', { restart: true });
+      if (res.status) {
+        state = res.status;
+        renderAll();
+      }
+    } finally {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }, 2000);
+    }
+  }
+  $('launch-agy-btn').addEventListener('click', () => relaunchAntigravity($('launch-agy-btn')));
+  $('banner-relaunch-btn').addEventListener('click', () => relaunchAntigravity($('banner-relaunch-btn')));
+
+  $('create-shortcut-btn').addEventListener('click', async () => {
+    const btn = $('create-shortcut-btn');
+    btn.disabled = true;
+    btn.textContent = '生成中...';
+    try {
+      const res = await api('/api/create-shortcut', 'POST', {});
+      $('shortcut-sub').innerHTML = `<span style="color:var(--ok)">已创建</span> · ${escapeHtml(res.shortcutPath || '桌面 Antigravity (Proxy).lnk')}`;
+      if (res.status) {
+        state = res.status;
+        renderAll();
+      }
+    } catch (err) {
+      $('shortcut-sub').innerHTML = `<span style="color:var(--danger)">生成失败: ${escapeHtml(err.message)}</span>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '生成快捷方式';
+    }
+  });
+
+  // Routing rules tab
+  $('mode-rule-btn').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { routingMode: 'rule' });
+    renderAll();
+  });
+  $('mode-global-btn').addEventListener('click', async () => {
+    state = await api('/api/config', 'POST', { routingMode: 'global' });
+    renderAll();
+  });
+  $('add-rule-btn').addEventListener('click', async () => {
+    const domain = $('new-rule-domain').value.trim();
+    if (!domain) return;
+    const type = $('new-rule-type').value;
+    state = await api('/api/rules', 'POST', { action: 'add', domain, type });
+    $('new-rule-domain').value = '';
+    renderAll();
+  });
+  $('rule-filter').addEventListener('input', (e) => {
+    ruleFilterText = e.target.value;
+    renderRulesTab();
+  });
+  $('toggle-rules-expand-btn').addEventListener('click', () => {
+    rulesExpanded = !rulesExpanded;
+    renderRulesTab();
+  });
+  $('toggle-bulk-btn').addEventListener('click', () => $('bulk-box').classList.toggle('hidden'));
+  $('bulk-cancel-btn').addEventListener('click', () => $('bulk-box').classList.add('hidden'));
+  $('bulk-save-btn').addEventListener('click', async () => {
+    const text = $('bulk-text').value;
+    if (!text.trim()) return;
+    state = await api('/api/rules/bulk-add', 'POST', { text, type: 'suffix' });
+    $('bulk-text').value = '';
+    $('bulk-box').classList.add('hidden');
+    renderAll();
+  });
+  $('reset-rules-btn').addEventListener('click', async () => {
+    state = await api('/api/rules/reset', 'POST', {});
+    renderAll();
+  });
+  $('rules-list').addEventListener('click', async (e) => {
+    const tog = e.target.closest('[data-toggle-rule]');
+    if (tog) {
+      state = await api('/api/rules', 'POST', { action: 'toggle', id: tog.dataset.toggleRule });
+      renderAll();
+      return;
+    }
+    const del = e.target.closest('[data-del-rule]');
+    if (del) {
+      state = await api('/api/rules', 'POST', { action: 'delete', id: del.dataset.delRule });
+      renderAll();
+    }
+  });
+
+  // Logs & probe tab
+  $('probe-domain-btn').addEventListener('click', async () => {
+    const domain = $('probe-domain-input').value.trim();
+    if (!domain) return;
+    const res = await api('/api/test-domain', 'POST', { domain });
+    const el = $('probe-result');
+    el.classList.remove('hidden');
+    const cls = res.action === 'PRIMARY' ? 'accent' : (res.action === 'BLOCKED' ? 'danger' : 'ok');
+    el.innerHTML = `<span class="badge ${cls}">${escapeHtml(res.action)}</span> <span>${escapeHtml(res.reason)}</span>`;
+  });
+  document.querySelectorAll('[data-log-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      logView = btn.dataset.logView;
+      renderActiveConnections(lastConnections);
+      renderLogs(lastLogs);
+    });
+  });
+  $('active-conns-list').addEventListener('click', async (e) => {
+    const closeBtn = e.target.closest('[data-close-conn]');
+    if (!closeBtn) return;
+    const res = await api('/api/connections/close', 'POST', { id: closeBtn.dataset.closeConn });
+    renderActiveConnections(res.connections || []);
+  });
+  $('toggle-log-dedup-btn').addEventListener('click', () => {
+    logDedupe = !logDedupe;
+    renderLogs(lastLogs);
+  });
+  $('log-cats').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-log-cat]');
+    if (!btn) return;
+    logCategory = btn.dataset.logCat;
+    renderLogs(lastLogs);
+  });
+  $('log-filter-input').addEventListener('input', (e) => {
+    logFilterText = e.target.value;
+    renderActiveConnections(lastConnections);
+    renderLogs(lastLogs);
+  });
+  $('refresh-logs-btn').addEventListener('click', refreshLogs);
+  $('clear-logs-btn').addEventListener('click', async () => {
+    await api('/api/logs/clear', 'POST', {});
+    renderLogs([]);
+  });
+  $('logs-list').addEventListener('click', async (e) => {
+    const cap = e.target.closest('[data-capture-domain]');
+    if (!cap) return;
+    const domain = cap.dataset.captureDomain;
+    state = await api('/api/rules', 'POST', { action: 'add', domain, type: 'suffix' });
+    renderAll();
+    await refreshLogs();
+  });
+
+  // Initial load + 2s refresh for real-time TX/RX speed bar
+  refreshStatus().then(refreshLogs).catch((err) => {
+    const banner = $('geo-banner');
+    if (banner) {
+      banner.classList.remove('hidden');
+      banner.textContent = `状态加载失败: ${err?.message || '请检查 Proxy Router 服务或刷新页面'}`;
+    }
+  });
+  setInterval(() => {
+    refreshStatus().catch(() => {});
+    refreshLogs().catch(() => {});
+  }, 2000);
+})();
+</script>
+</body>
+</html>
