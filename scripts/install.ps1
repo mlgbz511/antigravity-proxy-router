@@ -56,3 +56,18 @@ foreach ($rel in @('plugin.json', 'README.md', 'assets', 'skills', 'sidecars', '
 }
 
 Write-Host "[OK] Installed plugin to: $dst"
+
+# Auto-configure: start daemon, enable custom routing mode, and take over settings.json
+$daemonScript = Join-Path $dst 'scripts\daemon.ps1'
+if (Test-Path $daemonScript) {
+    try {
+        & $daemonScript -Action start
+        $cfgBody = '{"connectionMode":"custom"}'
+        Invoke-RestMethod -Uri 'http://127.0.0.1:17891/api/config' -Method Post -ContentType 'application/json' -Body $cfgBody -TimeoutSec 5 | Out-Null
+        $tkBody = '{"target":"settings","action":"enable"}'
+        Invoke-RestMethod -Uri 'http://127.0.0.1:17891/api/takeover' -Method Post -ContentType 'application/json' -Body $tkBody -TimeoutSec 5 | Out-Null
+        Write-Host "[OK] Auto-configured: daemon started, connectionMode=custom, settings.json taken over"
+    } catch {
+        Write-Host "[WARN] Plugin installed, but auto-configure skipped: $_"
+    }
+}
