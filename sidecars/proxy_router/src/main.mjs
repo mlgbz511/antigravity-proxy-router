@@ -8,6 +8,7 @@ import { HealthMonitor } from './health-monitor.mjs';
 import { ProxyServer } from './proxy-server.mjs';
 import { SettingsManager } from './settings-manager.mjs';
 import { DaemonManager, probeControlEndpoint } from './daemon-manager.mjs';
+import { getDllStatus, enableDllPatch, disableDllPatch } from './dll-patch-manager.mjs';
 
 const CONSOLE_HTML_URL = new URL('./console.html', import.meta.url);
 const DEFAULT_CONTROL_PORT = parseInt(process.env.ANTIGRAVITY_PROXY_ROUTER_CONTROL_PORT || '17891', 10) || 17891;
@@ -166,6 +167,7 @@ export function createApp({
       hostEnv,
       envConflicts,
       daemon,
+      dllPatch: getDllStatus({ listenHost: cfg.listenHost, listenPort: cfg.listenPort }),
     };
   }
 
@@ -345,6 +347,18 @@ export function createApp({
           restart: body.restart !== false,
         });
         sendJson(res, 200, { ...launchRes, status: await getFullStatus() });
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/dll-patch') {
+        const body = await readJsonBody(req);
+        const cfg = configStore.data;
+        if (body.action === 'disable') {
+          disableDllPatch({ listenHost: cfg.listenHost, listenPort: cfg.listenPort });
+        } else {
+          enableDllPatch({ listenHost: cfg.listenHost, listenPort: cfg.listenPort });
+        }
+        sendJson(res, 200, await getFullStatus());
         return;
       }
 

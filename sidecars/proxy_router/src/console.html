@@ -941,6 +941,14 @@
 
           <div class="takeover-row">
             <div class="tg-row-main">
+              <span class="tg-row-label">底层透明接管 (version.dll)</span>
+              <div id="dll-patch-sub" class="tg-row-sub">检测中...</div>
+            </div>
+            <button id="dll-patch-btn" class="btn btn-sm" type="button">接管</button>
+          </div>
+
+          <div class="takeover-row">
+            <div class="tg-row-main">
               <span class="tg-row-label">IDE 扩展代理 (settings.json)</span>
               <div id="settings-takeover-sub" class="tg-row-sub">检测中...</div>
             </div>
@@ -1387,6 +1395,26 @@
       sSub.textContent = tk.currentHttpProxy ? `当前: ${tk.currentHttpProxy}` : '未接管';
       sBtn.textContent = '接管';
       sBtn.className = 'btn btn-sm';
+    }
+
+    const dp = state.dllPatch || {};
+    const dpSub = $('dll-patch-sub');
+    const dpBtn = $('dll-patch-btn');
+    if (dpSub && dpBtn) {
+      if (!dp.supported || !dp.installDir) {
+        dpSub.textContent = '未检测到 Antigravity 安装目录';
+        dpBtn.disabled = true;
+      } else if (dp.enabled) {
+        dpSub.innerHTML = `<span style="color:var(--ok)">已接管</span> · ${dp.installDir}\\version.dll`;
+        dpBtn.textContent = '还原';
+        dpBtn.className = 'btn btn-sm btn-danger';
+        dpBtn.disabled = false;
+      } else {
+        dpSub.textContent = '未接管（接管后无需环境变量/Proxifier，重启客户端生效）';
+        dpBtn.textContent = '接管';
+        dpBtn.className = 'btn btn-sm btn-primary';
+        dpBtn.disabled = !dp.bundledExists;
+      }
     }
   }
 
@@ -1876,6 +1904,12 @@
   }
   $('launch-agy-btn').addEventListener('click', () => relaunchAntigravity($('launch-agy-btn')));
   $('banner-relaunch-btn').addEventListener('click', () => relaunchAntigravity($('banner-relaunch-btn')));
+
+  $('dll-patch-btn')?.addEventListener('click', async () => {
+    const action = state.dllPatch?.enabled ? 'disable' : 'enable';
+    state = await api('/api/dll-patch', 'POST', { action });
+    renderAll();
+  });
 
   // Routing rules tab
   $('mode-rule-btn').addEventListener('click', async () => {

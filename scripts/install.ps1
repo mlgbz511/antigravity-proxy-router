@@ -66,7 +66,10 @@ if (Test-Path $daemonScript) {
         Invoke-RestMethod -Uri 'http://127.0.0.1:17891/api/config' -Method Post -ContentType 'application/json' -Body $cfgBody -TimeoutSec 5 | Out-Null
         $tkBody = '{"target":"settings","action":"enable"}'
         Invoke-RestMethod -Uri 'http://127.0.0.1:17891/api/takeover' -Method Post -ContentType 'application/json' -Body $tkBody -TimeoutSec 5 | Out-Null
-        Write-Host "[OK] Auto-configured: daemon started, connectionMode=custom, settings.json taken over"
+        if (Test-Path (Join-Path $dst 'assets\bin\version.dll')) {
+            Invoke-RestMethod -Uri 'http://127.0.0.1:17891/api/dll-patch' -Method Post -ContentType 'application/json' -Body '{"action":"enable"}' -TimeoutSec 5 | Out-Null
+        }
+        Write-Host "[OK] Auto-configured: daemon started, connectionMode=custom, settings.json & version.dll taken over"
     } catch {
         Write-Host "[WARN] Plugin installed, but auto-configure skipped: $_"
     }
