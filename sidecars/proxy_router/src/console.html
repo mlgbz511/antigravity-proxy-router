@@ -941,22 +941,6 @@
 
           <div class="takeover-row">
             <div class="tg-row-main">
-              <span class="tg-row-label">原生快捷方式接管</span>
-              <div id="shortcut-sub" class="tg-row-sub">检测中...</div>
-            </div>
-            <button id="shortcut-takeover-btn" class="btn btn-sm" type="button">接管</button>
-          </div>
-
-          <div class="takeover-row">
-            <div class="tg-row-main">
-              <span class="tg-row-label">刷新桌面环境缓存</span>
-              <div id="refresh-shell-sub" class="tg-row-sub">重启 Explorer 重载 HTTPS_PROXY</div>
-            </div>
-            <button id="refresh-shell-btn" class="btn btn-sm" type="button">刷新桌面</button>
-          </div>
-
-          <div class="takeover-row">
-            <div class="tg-row-main">
               <span class="tg-row-label">IDE 扩展代理 (settings.json)</span>
               <div id="settings-takeover-sub" class="tg-row-sub">检测中...</div>
             </div>
@@ -1403,21 +1387,6 @@
       sSub.textContent = tk.currentHttpProxy ? `当前: ${tk.currentHttpProxy}` : '未接管';
       sBtn.textContent = '接管';
       sBtn.className = 'btn btn-sm';
-    }
-
-    const sc = state.shortcutStatus || {};
-    const scSub = $('shortcut-sub');
-    const scBtn = $('shortcut-takeover-btn');
-    if (scSub && scBtn) {
-      if (sc.takenOver) {
-        scSub.innerHTML = `<span style="color:var(--ok)">已接管</span> · ${sc.count} 个原生快捷方式`;
-        scBtn.textContent = '还原';
-        scBtn.className = 'btn btn-sm btn-danger';
-      } else {
-        scSub.textContent = '未接管（接管桌面/开始菜单 Antigravity.lnk）';
-        scBtn.textContent = '接管';
-        scBtn.className = 'btn btn-sm';
-      }
     }
   }
 
@@ -1907,31 +1876,6 @@
   }
   $('launch-agy-btn').addEventListener('click', () => relaunchAntigravity($('launch-agy-btn')));
   $('banner-relaunch-btn').addEventListener('click', () => relaunchAntigravity($('banner-relaunch-btn')));
-
-  $('shortcut-takeover-btn').addEventListener('click', async () => {
-    const action = state.shortcutStatus?.takenOver ? 'restore' : 'takeover';
-    state = await api('/api/shortcuts', 'POST', { action });
-    renderAll();
-  });
-
-  $('refresh-shell-btn').addEventListener('click', async () => {
-    const btn = $('refresh-shell-btn');
-    btn.disabled = true;
-    btn.textContent = '刷新中...';
-    try {
-      const res = await api('/api/refresh-shell', 'POST', {});
-      $('refresh-shell-sub').textContent = res.coodeskerRunning
-        ? 'Explorer 已刷新（若用 Coodesker 请重启 Coodesker）'
-        : 'Explorer 已刷新';
-      if (res.status) {
-        state = res.status;
-        renderAll();
-      }
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '刷新桌面';
-    }
-  });
 
   // Routing rules tab
   $('mode-rule-btn').addEventListener('click', async () => {

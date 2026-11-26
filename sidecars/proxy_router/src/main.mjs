@@ -164,7 +164,6 @@ export function createApp({
       health,
       takeover,
       hostEnv,
-      shortcutStatus: daemonManager.getShortcutStatus({ configStore }),
       envConflicts,
       daemon,
     };
@@ -346,27 +345,6 @@ export function createApp({
           restart: body.restart !== false,
         });
         sendJson(res, 200, { ...launchRes, status: await getFullStatus() });
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/shortcuts') {
-        const body = await readJsonBody(req);
-        const action = body.action || 'takeover';
-        if (action === 'restore') {
-          daemonManager.restoreShortcuts({ configStore });
-        } else {
-          daemonManager.takeoverShortcuts({
-            configStore,
-            listenPort: configStore.data.listenPort,
-          });
-        }
-        sendJson(res, 200, await getFullStatus());
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/refresh-shell') {
-        const resShell = settingsManager.refreshDesktopShell();
-        sendJson(res, 200, { ...resShell, status: await getFullStatus() });
         return;
       }
 
