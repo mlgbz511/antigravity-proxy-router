@@ -1,28 +1,35 @@
 # Antigravity Proxy Router
 
-Telegram-style domain-aware proxy router for Antigravity, replacing Proxifier + V2rayN's flow interception.
+Domain-aware proxy router and Geo-Guard gateway for Antigravity on Windows, replacing Proxifier + V2rayN flow interception.
 
 ## Features
 
-- **Multi-proxy management** with health checking and auto-switch
-- **Domain-based split routing** with 14 preset Antigravity domains
-- **Auto domain capture** — unknown domains appear in real-time logs for one-click addition
-- **Geo-Guard strict mode** — circuit breaker blocks cloud requests when exit IP lands in restricted regions
-- **agy CLI support** — one-click `HTTPS_PROXY` user environment variable takeover
-- **Zero dependencies** — pure Node.js stdlib, no npm install needed
+- **Transparent `version.dll` Takeover** — intercepts Antigravity frontend & `language_server` backend traffic without Proxifier, TUN mode, or environment variable hacks (powered by `yuaotian/antigravity-proxy`, BSD-2-Clause)
+- **Multi-proxy Management** — health checking, latency probing, and auto-switch
+- **Domain-based Split Routing** — preset Antigravity & Google domains with real-time unknown domain capture
+- **Geo-Guard Strict Mode** — circuit breaker blocks cloud requests when exit IP lands in restricted regions
+- **Zero Node.js Dependencies** — pure Node.js stdlib, no `npm install` needed
 
-## Install
+## One-Click Install (Windows)
+
+Run in PowerShell (auto-installs plugin, starts daemon, enables `custom` mode, and applies `settings.json` + `version.dll` takeover):
 
 ```powershell
-pwsh plugins/antigravity-proxy-router/scripts/install.ps1
+irm https://raw.githubusercontent.com/mlgbz511/antigravity-proxy-router/main/scripts/remote-install.ps1 | iex
+```
+
+Or from a local clone:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
 ## Uninstall
 
 ```powershell
-pwsh plugins/antigravity-proxy-router/scripts/install.ps1 -Uninstall
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.gemini\config\plugins\antigravity-proxy-router\scripts\install.ps1" -Uninstall
 ```
 
 ## Usage
 
-After installation, restart Antigravity. The **Proxy Router** panel appears in the side pane "+" menu. Configure your upstream proxy (e.g., V2rayN SOCKS5 port), click "Take Over", and disable Proxifier.
+After installation, restart Antigravity once so `version.dll` takes effect. Open the **Proxy Router** panel (or `http://127.0.0.1:17891/`) to manage upstream proxies, routing rules, Geo-Guard, and live logs.
