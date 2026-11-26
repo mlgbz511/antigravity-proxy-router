@@ -1220,18 +1220,6 @@
     } else {
       conflictBanner.classList.add('hidden');
     }
-
-    const staleBanner = $('env-stale-banner');
-    const he = state.hostEnv;
-    const tk = state.takeover;
-    if (state.config.connectionMode === 'custom' && he && he.reportedBySidecar && !he.effective) {
-      staleBanner.classList.remove('hidden');
-      $('env-stale-text').textContent = tk?.envTakenOver
-        ? '当前 Antigravity 进程未继承 HTTPS_PROXY（常见于桌面/Coodesker 缓存旧环境变量），请点右侧「带代理重启客户端」立即注入。'
-        : '当前 Antigravity 进程未设置 HTTPS_PROXY，请先在「风控与接管」写入环境变量或直接点右侧「带代理重启客户端」。';
-    } else {
-      staleBanner.classList.add('hidden');
-    }
   }
 
   function renderProxiesTab() {
