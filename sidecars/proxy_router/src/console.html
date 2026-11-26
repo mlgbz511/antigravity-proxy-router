@@ -820,10 +820,6 @@
     <div class="scroll-inner">
     <div id="geo-banner" class="banner danger hidden"></div>
     <div id="conflict-banner" class="banner warn hidden"></div>
-    <div id="env-stale-banner" class="banner warn hidden" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-      <span id="env-stale-text"></span>
-      <button id="banner-relaunch-btn" class="btn btn-primary btn-sm" type="button">带代理重启客户端</button>
-    </div>
 
     <!-- TAB 1: Proxies & Connection Mode -->
     <div id="panel-proxies" class="tab-panel">
@@ -922,21 +918,6 @@
         <section class="section">
           <div class="section-head">
             <span class="section-title">客户端接管与连接</span>
-          </div>
-
-          <div class="takeover-row">
-            <div class="tg-row-main">
-              <span class="tg-row-label">Antigravity &amp; agy CLI (HTTPS_PROXY)</span>
-              <div id="env-takeover-sub" class="tg-row-sub">检测中...</div>
-            </div>
-            <button id="env-takeover-btn" class="btn btn-primary btn-sm" type="button">写入</button>
-          </div>
-
-          <div class="takeover-row">
-            <div class="tg-row-main">
-              <span class="tg-row-label">带代理重启 Antigravity</span>
-            </div>
-            <button id="launch-agy-btn" class="btn btn-primary btn-sm" type="button">重启客户端</button>
           </div>
 
           <div class="takeover-row">
@@ -1367,23 +1348,6 @@
     $('chk-autostart').classList.toggle('checked', Boolean(dm.autostartEnabled));
 
     const tk = state.takeover;
-    const he = state.hostEnv;
-    const eSub = $('env-takeover-sub');
-    const eBtn = $('env-takeover-btn');
-    if (tk.envTakenOver) {
-      const liveHint = he?.reportedBySidecar
-        ? (he.effective
-          ? '<span style="color:var(--ok)">当前已生效</span>'
-          : '<span style="color:var(--warn)">当前未继承（需重启客户端）</span>')
-        : '重开客户端后生效';
-      eSub.innerHTML = `<span style="color:var(--ok)">已写入</span> · ${liveHint}`;
-      eBtn.textContent = '还原';
-      eBtn.className = 'btn btn-sm btn-danger';
-    } else {
-      eSub.textContent = tk.envHttpsProxy ? `当前: ${tk.envHttpsProxy}` : '未写入';
-      eBtn.textContent = '写入';
-      eBtn.className = 'btn btn-sm btn-primary';
-    }
 
     const sSub = $('settings-takeover-sub');
     const sBtn = $('settings-takeover-btn');
@@ -1880,30 +1844,6 @@
     state = await api('/api/takeover', 'POST', { target: 'settings', action });
     renderAll();
   });
-  $('env-takeover-btn').addEventListener('click', async () => {
-    const action = state.takeover.envTakenOver ? 'restore' : 'enable';
-    state = await api('/api/takeover', 'POST', { target: 'env', action });
-    renderAll();
-  });
-  async function relaunchAntigravity(btn) {
-    const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '重启中...';
-    try {
-      const res = await api('/api/launch-antigravity', 'POST', { restart: true });
-      if (res.status) {
-        state = res.status;
-        renderAll();
-      }
-    } finally {
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.textContent = orig;
-      }, 2000);
-    }
-  }
-  $('launch-agy-btn').addEventListener('click', () => relaunchAntigravity($('launch-agy-btn')));
-  $('banner-relaunch-btn').addEventListener('click', () => relaunchAntigravity($('banner-relaunch-btn')));
 
   $('dll-patch-btn')?.addEventListener('click', async () => {
     const action = state.dllPatch?.enabled ? 'disable' : 'enable';
