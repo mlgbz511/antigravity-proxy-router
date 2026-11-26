@@ -680,6 +680,16 @@ export function createApp({
           healthMonitor.start({ skipInitial: true });
           if (isDaemonProcess) {
             daemonManager.writePidFile(process.pid);
+            if (!proxyServer.isListening) {
+              const retryTimer = setInterval(async () => {
+                if (proxyServer.isListening) { clearInterval(retryTimer); return; }
+                try {
+                  await proxyServer.listen(proxyPort);
+                  clearInterval(retryTimer);
+                } catch {}
+              }, 2000);
+              retryTimer.unref?.();
+            }
           } else if (bridgeEligible) {
             // If a daemon restarts later while Sidecar is temporarily holding 17890, yield back automatically.
             const yieldTimer = setInterval(async () => {
