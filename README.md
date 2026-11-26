@@ -1,5 +1,7 @@
 # Antigravity Proxy Router
 
+English | [简体中文](README.zh-CN.md)
+
 Domain-aware proxy router and Geo-Guard gateway for Antigravity on Windows, replacing Proxifier + V2rayN flow interception.
 
 ## Features
@@ -33,3 +35,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.gemin
 ## Usage
 
 After installation, restart Antigravity once so `version.dll` takes effect. Open the **Proxy Router** panel (or `http://127.0.0.1:17891/`) to manage upstream proxies, routing rules, Geo-Guard, and live logs.
+
+## Acknowledgments
+
+- Transparent `version.dll` proxy injection is powered by [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy) (**BSD-2-Clause** License).
